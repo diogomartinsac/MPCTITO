@@ -96,7 +96,7 @@ xk = zeros(nx,1); uk_1 = [0.2142;0.2411];
 
 %% Implementação MPC
 
-nsim = 1000       ;    % Número de Simulações
+nsim = 1500       ;    % Número de Simulações
 du0  = zeros(nu*Hc,1); % Estimativa inicial para o otimizador
 
 % Modelo da planta
@@ -115,7 +115,7 @@ P = W;    % Variancia do erro (valor inicial)
 % Restrições
 
 dumax = ([0.1;0.1;0.1;0.1;0.1;0.1]/10)*3; dumin = -dumax;
-umax = [0.6;0.6];  umin = [0.01; 0.01];
+umax = [0.95;0.95];  umin = [0.01; 0.01];
 Mtil=[];
 Itil=[];
 auxM=zeros(nu,Hc*nu);
@@ -140,11 +140,11 @@ for k = 1:nsim
     if k== 1
         ysp(1) = 0.65;
         ysp(2) = 0.28;
-    elseif k == 200
+    elseif k == 1200
         ysp(1) = 0.35;
-    elseif k == 300
+    elseif k == 200
         ysp(2) = 0.678;
-    elseif k == 400
+    elseif k == 700
         Q = 30*0.001/3600;
     end
 Q_ra(k) = Q;
@@ -188,7 +188,7 @@ Q_ra(k) = Q;
     % Planta                                 
     tspan = ([0 0.1] + (k-1)*[0.1 0.1])';
 
-    [t,ys] = ode45(@(t,h)twotanksODE(t,h,uk_1,Q),tspan, h0);
+    [t,ys] = ode45(@(t,h)twotanksODE(t,h,uk_1,Q),tspan, h0) ;
     
     yk(:,k) = ys(end,:) + mvnrnd(zeros(ny,1),V);     
 
