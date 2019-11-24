@@ -1,87 +1,65 @@
 clear all
 clc
-syms h1 h2 u1 u2 Q A1 A2 H c13 c23 c7 qout1 qout2 d1 d2
+syms h wi_dot hM B C gamma rho rho g k c cplanta
 %Definição das entradas
-u=[u1;u2];
+u=[wi_dot];
 %Definição dos estados
-x=[h1;h2];        
+x=[h];        
 %Equações diferenciais
 %------------------------------------------
-% Se h2 =< 0.405
-qout1 = u1*sqrt(h1)/sqrt(c13*u1^2 + c23);
-qout2 = c7*u2*sqrt(h2);
+beta = 1/(pi*gamma^2*(h+(B/2)/gamma)^2);
 
-dh1dt = (Q - qout1)/A1;
-dh2dt = (qout1 - qout2)/A2;  
-sys1 = [dh1dt dh2dt];
-%------------------------------------------
-% Se h2 > 0.405
-qout1 = u1*sqrt(h1-h2+H)/sqrt(c13*u1^2 + c23);
-qout2 = c7*u2*sqrt(h2);
+dhdt = beta*(wi_dot-cplanta*sqrt(h));
 
-dh1dt = (Q - qout1)/A1;
-dh2dt = (qout1 - qout2)/A2;  
-sys2 = [dh1dt dh2dt];
+ 
+sys = [dhdt];
+
+
+
+
 %------------------------------------------
 %% Linearização do Sistema - Matrizes com Simbólico
-Am1=jacobian(sys1,x);
-Bm1=jacobian(sys1,u);
-Cm1= eye(2);
-Dm1=zeros(size(Bm1));
-%% -------------------------------------------
-Am2=jacobian(sys2,x);
-Bm2=jacobian(sys2,u);
-Cm2= eye(2);
-Dm2=zeros(size(Bm2));
+A=jacobian(sys,x);
+B=jacobian(sys,u);
+C= 1;
+D=zeros(size(B));
 
 %% Parâmetros do modelo
-d1 = 0.13 ;       % Diâmetro do Tanque 1
-d2 = 0.06 ;       % Diâmetro do Tanque 2
+hM    =  2;                       % m
+B       = 1.5;                     % m
+C       = 4.0 ;                    % m
+gamma = ((C/2) - (B/2))/hM;
 
-A1 = (pi/4)*d1^4;  % m^2 tank1 and tank2 area
-A2 = (pi/4)*d2^4;  % m^2 tank1 and tank2 area
+rho    = 1000;         % kg/m^3
+g       = 9.8;            % m/s^2
+k       = 0.04 ;
 
-h1 = 0.405 ;      % m - Conection heigth
-h2 = 0.405 ;      % m - Conection heigth
-H = 0.405  ;      % m - Conection heigth
+c        = k*sqrt(rho*g);
 
-Q = 150*0.001/3600;          % Vazão de entrada [L/h]
-
-c13 = 3.4275e7  ;  % s2/m5 - valve constant
-c23 = 0.9128e7  ;  % s2/m5 - valve constant
-c7  = 2.7154e-4 ;  % s2/m5 - valve constant
-
-u1 = 0.2142 ;
-u2 = 0.2411 ;
-
+% Planta
+h = 1;
+wi_dot = 0;
+cplanta = 1.1*c;
+%%
 %Matrizes com valores numéricos
 
-Am1=double(subs(Am1));
-Bm1=double(subs(Bm1));
-%-------------------------------------------
-Am2=double(subs(Am2));
-Bm2=double(subs(Bm2));
-
+A=double(subs(A));
+B=double(subs(B));
+%%
 % State Space
 Ts=0.1;
-Dinamica_1 = ss(Am1,Bm1,Cm1,Dm1);
-Dinamica_1d = c2d(Dinamica_1,Ts,'zoh');
-%-------------------------------------------
-Dinamica_2 = ss(Am2,Bm2,Cm2,Dm2);
-Dinamica_2d = c2d(Dinamica_2,Ts,'zoh');
+Dinamica = ss(A,B,C,D);
+Dinamica = c2d(Dinamica,Ts,'zoh');
+%%
 
 %MPC
-nx = length(Dinamica_1d.A);    % Numero de estados
-ny = size(Dinamica_1d.C,1);    % Numero de variaveis controladas
-nu = size(Dinamica_1d.B,2);    % Numero de variaveis manipuladas
+nx = length(Dinamica.A);    % Numero de estados
+ny = size(Dinamica.C,1);    % Numero de variaveis controladas
+nu = size(Dinamica.B,2);    % Numero de variaveis manipuladas
 
-sysi1.A = [Dinamica_1d.A, Dinamica_1d.B; zeros(nu,nx), eye(nu)];
-sysi1.B = [Dinamica_1d.B; eye(nu)];
-sysi1.C = [Dinamica_1d.C, zeros(ny,nu)];
-%--------------------------
-sysi2.A = [Dinamica_2d.A, Dinamica_2d.B; zeros(nu,nx), eye(nu)];
-sysi2.B = [Dinamica_2d.B; eye(nu)]; 
-sysi2.C = [Dinamica_2d.C, zeros(ny,nu)];
+sysi1.A = [Dinamica.A, Dinamica.B; zeros(nu,nx), eye(nu)];
+sysi1.B = [Dinamica.B; eye(nu)];
+sysi1.C = [Dinamica.C, zeros(ny,nu)];
 
 nx = length(sysi1.A); % atualização do numero de estados
 
@@ -89,14 +67,14 @@ nx = length(sysi1.A); % atualização do numero de estados
 
 Hp = 10; Hc = 3;  
 
-q = [2,1]; r = [0.1,0.1];
+q = [1]; r = [0.1,0.1];
 ysp = [0; 0];
 
 xk = zeros(nx,1); uk_1 = [0.2142;0.2411];
 
 %% Implementação MPC
 
-nsim = 500       ;    % Número de Simulações
+nsim = 1000       ;    % Número de Simulações
 du0  = zeros(nu*Hc,1); % Estimativa inicial para o otimizador
 
 % Modelo da planta
@@ -146,8 +124,6 @@ for k = 1:nsim
         ysp(2) = 0.678;
     elseif k == 400
         Q = 30*0.001/3600;
-    elseif k == 500 
-        ysp(1) = 0.5;
     end
 Q_ra(k) = Q;
     

@@ -7,8 +7,8 @@
 %% Author: J.A. Rossiter  (email: J.A.Rossiter@shef.ac.uk)
 
 %%% SISO Model and GPC parameters
-b=[0 0.5927];% 0    0.5927
-a=[1 -0.9759]; %1.0000   -0.9759
+b=[0 0.5927];
+a=[1 -0.9759]; 
 sizey=1;  %%% siso
 ny=10;
 nu=3;
@@ -16,8 +16,8 @@ R=0.1;
 Q=1;
 ny2=40;
 Dumax=0.1;
-umax=5;
-umin=-5;
+umax=10;
+umin=0;
 %%%% plotting OL vs CL
 %%% closed-loop
 %%% Set point, disturbance and noise
@@ -25,7 +25,7 @@ ref = [zeros(1,10),ones(1,ny2+ny)];
 dist=[zeros(1,ny2+10+ny)];
 noise = [zeros(1,ny2+10+ny)];
 [y,u,Du,r] = mpc_simulate(b,a,nu,ny,R,Q,Dumax,umax,umin,ref,dist,noise);
-[y2,u2,Du2,r2] = mpc_simulate_noconstraints(b,a,nu,ny,R,1,ref,dist,noise);
+[y2,u2,Du2,r2] = mpc_simulate_noconstraints(b,a,nu,ny,R,Q,ref,dist*0,noise*0);
 
 figure(2); clf reset
 v=0:ny;v2=0:ny2;

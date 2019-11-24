@@ -1,0 +1,199 @@
+clear all
+clc
+syms h wi_dot hM B C gamma rho rho g k c cplanta
+%Definição das entradas
+u=[wi_dot];
+%Definição dos estados
+x=[h];        
+%Equações diferenciais
+%------------------------------------------
+beta = 1/(pi*gamma^2*(h+(B/2)/gamma)^2);
+
+dhdt = beta*(wi_dot-cplanta*sqrt(h));
+
+sys = [dhdt];
+
+%------------------------------------------
+% Linearização do Sistema - Matrizes com Simbólico
+A=jacobian(sys,x);
+B=jacobian(sys,u);
+C= 1;
+D=zeros(size(B));
+
+% Parâmetros do modelo
+hM    =  2;                       % m
+B       = 1.5;                     % m
+C       = 4.0 ;                    % m
+gamma = ((C/2) - (B/2))/hM;
+
+rho    = 1000;         % kg/m^3
+g       = 9.8;            % m/s^2
+k       = 0.04 ;
+
+c        = k*sqrt(rho*g);
+
+% Planta
+h = 1.318;
+wi_dot = 5;
+cplanta = 1.1*c;
+%
+%Matrizes com valores numéricos
+
+A=double(subs(A));
+B=double(subs(B));
+%
+% State Space
+Ts=0.1;
+Dinamica = ss(A,B,C,D);
+Dinamica = c2d(Dinamica,Ts,'zoh');
+% Transfer Function
+[a,b] = ss2tf(Dinamica.A,Dinamica.B,Dinamica.C,Dinamica.D,1);
+%%
+
+%MPC
+nx = length(Dinamica.A);    % Numero de estados
+ny = size(Dinamica.C,1);    % Numero de variaveis controladas
+nu = size(Dinamica.B,2);    % Numero de variaveis manipuladas
+
+sysi1.A = [Dinamica.A, Dinamica.B; zeros(nu,nx), eye(nu)];
+sysi1.B = [Dinamica.B; eye(nu)];
+sysi1.C = [Dinamica.C, zeros(ny,nu)];
+
+nx = length(sysi1.A); % atualização do numero de estados
+
+%% Parametros do controlador
+
+Hp = 10; Hc = 3;  
+
+q = [1]; r = [0.1];
+ysp = [0];
+
+xk = zeros(nx,1); uk_1 = [0];
+
+%% Implementação MPC
+
+nsim = 250       ;    % Número de Simulações
+du0  = zeros(nu*Hc,1); % Estimativa inicial para o otimizador
+
+% Modelo da planta
+unc = 1 ; % incerteza de modelagem (unc = 1, modelo é perfeito)
+
+planta.A = sysi1.A;
+planta.B = sysi1.B*unc;
+planta.C = sysi1.C*unc;
+
+% Filtro de Kalman
+W = 0.00001*eye(nx); % Variancia do modelo
+V = 0.00001*eye(ny); % Variancia da medicao
+xmk = xk; % Estado do modelo (valor inicial)
+P = W;    % Variancia do erro (valor inicial)
+
+% Restrições
+
+dumax = ([0.1]); dumin = -dumax;
+umax = [10];  umin = [0];
+Mtil=[];
+Itil=[];
+auxM=zeros(nu,Hc*nu);
+for in=1:Hc
+    auxM=[eye(nu) auxM(:,1:(Hc-1)*nu)];
+    Mtil=[Mtil;auxM];
+    Itil=[Itil;eye(nu)];
+end
+Ain = [Mtil;-Mtil];
+Bin = @(uk_1) [repmat(umax,Hc,1) - Itil*uk_1; Itil*uk_1 - repmat(umin,Hc,1)];
+Aeq = [];
+beq = [];
+umax = [10];  umin = [0];
+%%
+% Implementação
+% h0 = [ 0 0] ;
+h0 = [0] ;
+for k = 1:nsim
+    if k== 1
+        ysp(1) = 0;
+    elseif k == 50
+        ysp(1) = 1;
+    elseif k == 300
+        ysp(1) = 1;
+    end    
+%     elseif k == 400
+%         Q = 30*0.001/3600;
+%     end
+% Q_ra(k) = Q;
+    
+%     if  h0(2) >= 0.405
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
+    % MPC DINAMICA 1
+    du = fmincon(@(du) fob_MPC(xmk,du,Hp,Hc,sysi1,ysp-[h0],q,r),du0,Ain,Bin(uk_1),Aeq,beq,dumin,dumax);
+    
+    uk(:,k) = uk_1 + du(1:nu);
+    uk_1 = uk(:,k); 
+    
+    % Planta                                 
+    tspan = ([0 0.1] + (k-1)*[0.1 0.1])';
+
+    [t,ys] = ode45(@(t,h)conicalTank(t,h,uk_1),tspan, h0) ;
+    
+    yk(:,k) = ys(end,:); %+ mvnrnd(zeros(ny,1),V);     
+
+    h0 = yk(:,k) ;
+    yk_kalman= yk -[h0];
+    % Filtro de kalman - predicao
+    xmk = (sysi1.A)*xmk + sysi1.B*(du(1:nu));
+    ymk(:,k) = sysi1.C*xmk;
+    P = sysi1.A*P*sysi1.A' + W;
+    % Filtro de Kalman - correcao
+    K = P*sysi1.C'/(sysi1.C*P*sysi1.C' + V);
+    xmk = xmk + K*(yk_kalman(:,k) - ymk(:,k));
+    P = (eye(nx) - K*sysi1.C)*P;
+   
+
+    
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+    % Atualizacao de variaveis
+    du0 = [du(nu+1:end);zeros(nu,1)]; % Estimativa inicial do otmizador
+
+    sp(:,k) = ysp;
+    k
+end
+%% Graficos
+
+figure(3)
+
+
+    plot(1:nsim,sp(1,:),'--r',1:nsim,yk(1,:))%,'.k',1:nsim,ymk(1,:)+[0.405;0.405])
+    ylabel(['y_' num2str(1)])
+
+    grid on
+
+xlabel('k')
+legend('Setpoint','Medicao','Modelo','Location','Best')
+figure(2)
+for iu = 1:nu
+    subplot(nu,1,iu)
+    stairs(1:nsim,uk(iu,:),'k')
+    ylabel(['u_' num2str(iu)])
+    grid on
+end
+xlabel('k')
+% %%
+% for k = 1:1500
+%     if k>1 && k<200
+%         ysp(k) = 0.65;
+%     elseif k > 200 && k <300
+%         ysp(k) = 0.35;
+%     elseif k > 300
+%         ysp(k) = 0.678;
+%     end    
+%     
+% end
+% 
+% 
+% %%
+% %ysp=[zeros(1,10),ones(1,1500)];
+% noise=ysp*0;
+% dist=noise;
+% [y,u,Du,ysp1] = mpc_simulate_outputconstraints(b,a,Hc,Hp,r,q,dumax,umax,umin,0.8,0,ysp,dist,noise);
+% 
