@@ -1,0 +1,12 @@
+%% PPLANE file %%
+
+H.name = 'tanque area var acao integral.pps';
+H.xvar = 'x';
+H.yvar = '\sigma';
+H.xder = ' 1/beta*(-K1*(x-r)-K2*sigma-c*sqrt(x))';
+H.yder = 'x-r';
+H.pname = {'beta','K1','c','K2','r',''};
+H.pval = {'5.94','2','3.9598','2','1',''};
+H.fieldtype = 'arrows';
+H.npts = 20;
+H.wind = [0.5         1.5          -3          -1];

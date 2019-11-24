@@ -89,14 +89,14 @@ nx = length(sysi1.A); % atualização do numero de estados
 
 Hp = 10; Hc = 3;  
 
-q = [1,1]; r = [0.1,0.1];
+q = [2,1]; r = [0.1,0.1];
 ysp = [0; 0];
 
 xk = zeros(nx,1); uk_1 = [0.2142;0.2411];
 
 %% Implementação MPC
 
-nsim = 1500       ;    % Número de Simulações
+nsim = 500       ;    % Número de Simulações
 du0  = zeros(nu*Hc,1); % Estimativa inicial para o otimizador
 
 % Modelo da planta
@@ -140,12 +140,14 @@ for k = 1:nsim
     if k== 1
         ysp(1) = 0.65;
         ysp(2) = 0.28;
-    elseif k == 1200
-        ysp(1) = 0.35;
     elseif k == 200
+        ysp(1) = 0.35;
+    elseif k == 300
         ysp(2) = 0.678;
-    elseif k == 700
+    elseif k == 400
         Q = 30*0.001/3600;
+    elseif k == 500 
+        ysp(1) = 0.5;
     end
 Q_ra(k) = Q;
     
@@ -188,7 +190,7 @@ Q_ra(k) = Q;
     % Planta                                 
     tspan = ([0 0.1] + (k-1)*[0.1 0.1])';
 
-    [t,ys] = ode45(@(t,h)twotanksODE(t,h,uk_1,Q),tspan, h0) ;
+    [t,ys] = ode45(@(t,h)twotanksODE(t,h,uk_1,Q),tspan, h0);
     
     yk(:,k) = ys(end,:) + mvnrnd(zeros(ny,1),V);     
 

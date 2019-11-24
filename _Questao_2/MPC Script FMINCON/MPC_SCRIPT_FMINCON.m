@@ -115,7 +115,7 @@ P = W;    % Variancia do erro (valor inicial)
 % Restrições
 
 dumax = ([0.1;0.1;0.1;0.1;0.1;0.1]/10)*3; dumin = -dumax;
-umax = [0.6;0.6];  umin = [0.01; 0.01];
+umax = [0.95;0.95];  umin = [0.01; 0.01];
 Mtil=[];
 Itil=[];
 auxM=zeros(nu,Hc*nu);
